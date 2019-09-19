@@ -1,6 +1,6 @@
 [package]
 name = "smallstr"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Murarth <murarth@gmail.com>"]
 
 description = "String-like container based on SmallVec"
