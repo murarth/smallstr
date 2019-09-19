@@ -16,6 +16,7 @@ readme = "README.md"
 
 [features]
 std = ["smallvec/std"]
+union = ["smallvec/union"]
 default = ["std"]
 
 [dependencies]
