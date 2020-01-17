@@ -10,13 +10,7 @@ To include `smallstr` in your project, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-smallstr = "0.1"
-```
-
-And the following to your crate root:
-
-```rust
-extern crate smallstr;
+smallstr = "0.2"
 ```
 
 ## License
