@@ -661,6 +661,13 @@ impl<A: Array<Item=u8>> fmt::Debug for SmallString<A> {
     }
 }
 
+impl<A: Array<Item=u8>> fmt::Display for SmallString<A> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", &**self)
+    }
+}
+
 macro_rules! eq_str {
     ( $rhs:ty ) => {
         impl<'a, A: Array<Item=u8>> PartialEq<$rhs> for SmallString<A> {
@@ -958,6 +965,15 @@ mod test {
 
         let s: SmallString<[u8; 8]> = SmallString::from("foo");
         assert_eq!(s.into_string(), "foo");
+    }
+
+    #[test]
+    fn test_to_string() {
+        let s: SmallString<[u8; 2]> = SmallString::from("foo");
+        assert_eq!(s.to_string(), "foo");
+
+        let s: SmallString<[u8; 8]> = SmallString::from("foo");
+        assert_eq!(s.to_string(), "foo");
     }
 
     #[test]
