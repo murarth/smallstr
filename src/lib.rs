@@ -1,41 +1,40 @@
 //! Implements `SmallString`, a `String`-like container for small strings
 //!
-//! # `no_std` support
+//! ## `no_std` support
 //!
-//! Like `smallvec`, `smallstr` has a default-enabled feature named `std` which
-//! controls the dependency on Rust `libstd`.
+//! By default, `smallstr` does not depend on `std`. However, the `ffi` feature will add
+//! `std` as a dependency.
 //!
-//! To depend on `smallstr` without `libstd`, add `default-features = false`
-//! to the `smallstr` dependency.
+//! ## `ffi` feature
 //!
-//! # `serde` support
+//! The `ffi` feature will add the following trait implementations to `SmallString`:
+//!
+//! * `PartialEq<OsStr>`
+//! * `PartialEq<&'_ OsStr>`
+//! * `PartialEq<OsString>`
+//! * `PartialEq<Cow<'_, OsString>>`
+//!
+//! This feature also adds `std` as a dependency.
+//!
+//! ## `serde` support
 //!
 //! When the `serde` feature is enabled, the traits `serde::Deserialize` and
 //! `serde::Serialize` are implemented for `SmallString`.
 //!
 //! This feature is disabled by default.
+//!
+//! ## `union` feature
+//!
+//! This feature will enable the `union` feature in `smallvec`, which reduces the size of
+//! a `SmallString` instance. This feature requires a nightly compiler.
 
-#![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc))]
-
+#![no_std]
 #![deny(missing_docs)]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
 
-#[cfg(feature = "serde")]
-extern crate serde;
-
-#[cfg(test)]
-#[cfg(feature = "serde")]
-extern crate bincode;
-
-extern crate smallvec;
-
-#[cfg(not(feature = "std"))]
-mod std {
-    pub use core::*;
-}
+#[cfg(any(feature = "error", feature = "ffi",))]
+extern crate std;
 
 pub use string::*;
 

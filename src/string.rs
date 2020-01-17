@@ -1,32 +1,27 @@
-use std::borrow::{Borrow, BorrowMut};
-use std::cmp::Ordering;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-use std::iter::FromIterator;
-use std::ops;
-use std::ptr;
-use std::slice;
-use std::str::{self, Chars, Utf8Error};
+use core::borrow::{Borrow, BorrowMut};
+use core::cmp::Ordering;
+use core::fmt;
+use core::hash::{Hash, Hasher};
+use core::iter::FromIterator;
+use core::ops;
+use core::ptr;
+use core::slice;
+use core::str::{self, Chars, Utf8Error};
 
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-#[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
-
-#[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
-#[cfg(not(feature = "std"))]
-use alloc::String;
+use alloc::string::String;
 
-#[cfg(feature = "std")]
+#[cfg(feature = "ffi")]
 use std::ffi::{OsStr, OsString};
 
 #[cfg(feature = "serde")]
-use serde::ser::{Serialize, Serializer};
+use core::marker::PhantomData;
 #[cfg(feature = "serde")]
-use serde::de::{Deserialize, Deserializer, Error, Visitor};
-#[cfg(feature = "serde")]
-use std::marker::PhantomData;
+use serde::{
+    de::{Deserialize, Deserializer, Error, Visitor},
+    ser::{Serialize, Serializer},
+};
 
 use smallvec::{Array, SmallVec};
 
@@ -34,15 +29,15 @@ use smallvec::{Array, SmallVec};
 ///
 /// `SmallString` uses a `SmallVec<[u8; N]>` as its internal storage.
 #[derive(Clone, Default)]
-pub struct SmallString<A: Array<Item=u8>> {
+pub struct SmallString<A: Array<Item = u8>> {
     data: SmallVec<A>,
 }
 
-impl<A: Array<Item=u8>> SmallString<A> {
+impl<A: Array<Item = u8>> SmallString<A> {
     /// Construct an empty string.
     #[inline]
     pub fn new() -> SmallString<A> {
-        SmallString{
+        SmallString {
             data: SmallVec::new(),
         }
     }
@@ -53,7 +48,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     /// Will create a heap allocation only if `n` is larger than the inline capacity.
     #[inline]
     pub fn with_capacity(n: usize) -> SmallString<A> {
-        SmallString{
+        SmallString {
             data: SmallVec::with_capacity(n),
         }
     }
@@ -61,7 +56,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     /// Construct a `SmallString` by copying data from a `&str`.
     #[inline]
     pub fn from_str(s: &str) -> SmallString<A> {
-        SmallString{
+        SmallString {
             data: SmallVec::from_slice(s.as_bytes()),
         }
     }
@@ -69,7 +64,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     /// Construct a `SmallString` by using an existing allocation.
     #[inline]
     pub fn from_string(s: String) -> SmallString<A> {
-        SmallString{
+        SmallString {
             data: SmallVec::from_vec(s.into_bytes()),
         }
     }
@@ -79,14 +74,15 @@ impl<A: Array<Item=u8>> SmallString<A> {
     /// If the provided byte array is not valid UTF-8, an error is returned.
     #[inline]
     pub fn from_buf(buf: A) -> Result<SmallString<A>, FromUtf8Error<A>> {
-        let slice = unsafe { slice::from_raw_parts(buf.ptr(), A::size()) };
+        let data = SmallVec::from_buf(buf);
 
-        match str::from_utf8(slice) {
-            Ok(_) => Ok(unsafe { SmallString::from_buf_unchecked(buf) }),
-            Err(error) => Err(FromUtf8Error{
-                buf,
-                error,
-            }),
+        match str::from_utf8(&data) {
+            Ok(_) => Ok(SmallString { data }),
+            Err(error) => {
+                let buf = data.into_inner().ok().unwrap();
+
+                Err(FromUtf8Error { buf, error })
+            }
         }
     }
 
@@ -101,7 +97,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     /// that `&str`s are valid UTF-8.
     #[inline]
     pub unsafe fn from_buf_unchecked(buf: A) -> SmallString<A> {
-        SmallString{
+        SmallString {
             data: SmallVec::from_buf(buf),
         }
     }
@@ -148,9 +144,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
             let slice = slice::from_raw_parts(ptr, len);
             let s = str::from_utf8_unchecked(slice);
 
-            Drain{
-                iter: s.chars(),
-            }
+            Drain { iter: s.chars() }
         }
     }
 
@@ -171,7 +165,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     pub fn push(&mut self, ch: char) {
         match ch.len_utf8() {
             1 => self.data.push(ch as u8),
-            _ => self.push_str(ch.encode_utf8(&mut [0; 4]))
+            _ => self.push_str(ch.encode_utf8(&mut [0; 4])),
         }
     }
 
@@ -204,7 +198,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
                 self.data.set_len(new_len);
                 Some(ch)
             },
-            None => None
+            None => None,
         }
     }
 
@@ -285,7 +279,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     pub fn remove(&mut self, idx: usize) -> char {
         let ch = match self[idx..].chars().next() {
             Some(ch) => ch,
-            None => panic!("cannot remove a char from the end of a string")
+            None => panic!("cannot remove a char from the end of a string"),
         };
 
         let ch_len = ch.len_utf8();
@@ -296,7 +290,8 @@ impl<A: Array<Item=u8>> SmallString<A> {
             ptr::copy(
                 self.as_ptr().offset(next as isize),
                 self.as_mut_ptr().offset(idx as isize),
-                len - next);
+                len - next,
+            );
             self.data.set_len(len - ch_len);
         }
 
@@ -314,7 +309,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
 
         match ch.len_utf8() {
             1 => self.data.insert(idx, ch as u8),
-            _ => self.insert_str(idx, ch.encode_utf8(&mut [0; 4]))
+            _ => self.insert_str(idx, ch.encode_utf8(&mut [0; 4])),
         }
     }
 
@@ -336,11 +331,9 @@ impl<A: Array<Item=u8>> SmallString<A> {
             ptr::copy(
                 self.as_ptr().offset(idx as isize),
                 self.as_mut_ptr().offset((idx + amt) as isize),
-                len - idx);
-            ptr::copy_nonoverlapping(
-                s.as_ptr(),
-                self.as_mut_ptr().offset(idx as isize),
-                amt);
+                len - idx,
+            );
+            ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().offset(idx as isize), amt);
             self.data.set_len(len + amt);
         }
     }
@@ -389,9 +382,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
         let mut idx = 0;
 
         while idx < len {
-            let ch = unsafe {
-                self.get_unchecked(idx..len).chars().next().unwrap()
-            };
+            let ch = unsafe { self.get_unchecked(idx..len).chars().next().unwrap() };
 
             let ch_len = ch.len_utf8();
 
@@ -402,7 +393,8 @@ impl<A: Array<Item=u8>> SmallString<A> {
                     ptr::copy(
                         self.as_ptr().offset(idx as isize),
                         self.as_mut_ptr().offset((idx - del_bytes) as isize),
-                        ch_len);
+                        ch_len,
+                    );
                 }
             }
 
@@ -422,7 +414,7 @@ impl<A: Array<Item=u8>> SmallString<A> {
     }
 }
 
-impl<A: Array<Item=u8>> ops::Deref for SmallString<A> {
+impl<A: Array<Item = u8>> ops::Deref for SmallString<A> {
     type Target = str;
 
     #[inline]
@@ -432,7 +424,7 @@ impl<A: Array<Item=u8>> ops::Deref for SmallString<A> {
     }
 }
 
-impl<A: Array<Item=u8>> ops::DerefMut for SmallString<A> {
+impl<A: Array<Item = u8>> ops::DerefMut for SmallString<A> {
     #[inline]
     fn deref_mut(&mut self) -> &mut str {
         let bytes: &mut [u8] = &mut self.data;
@@ -440,35 +432,35 @@ impl<A: Array<Item=u8>> ops::DerefMut for SmallString<A> {
     }
 }
 
-impl<A: Array<Item=u8>> AsRef<str> for SmallString<A> {
+impl<A: Array<Item = u8>> AsRef<str> for SmallString<A> {
     #[inline]
     fn as_ref(&self) -> &str {
         self
     }
 }
 
-impl<A: Array<Item=u8>> AsMut<str> for SmallString<A> {
+impl<A: Array<Item = u8>> AsMut<str> for SmallString<A> {
     #[inline]
     fn as_mut(&mut self) -> &mut str {
         self
     }
 }
 
-impl<A: Array<Item=u8>> Borrow<str> for SmallString<A> {
+impl<A: Array<Item = u8>> Borrow<str> for SmallString<A> {
     #[inline]
     fn borrow(&self) -> &str {
         self
     }
 }
 
-impl<A: Array<Item=u8>> BorrowMut<str> for SmallString<A> {
+impl<A: Array<Item = u8>> BorrowMut<str> for SmallString<A> {
     #[inline]
     fn borrow_mut(&mut self) -> &mut str {
         self
     }
 }
 
-impl<A: Array<Item=u8>> fmt::Write for SmallString<A> {
+impl<A: Array<Item = u8>> fmt::Write for SmallString<A> {
     #[inline]
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.push_str(s);
@@ -483,26 +475,28 @@ impl<A: Array<Item=u8>> fmt::Write for SmallString<A> {
 }
 
 #[cfg(feature = "serde")]
-impl<A: Array<Item=u8>> Serialize for SmallString<A> {
+impl<A: Array<Item = u8>> Serialize for SmallString<A> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, A: Array<Item=u8>> Deserialize<'de> for SmallString<A> {
+impl<'de, A: Array<Item = u8>> Deserialize<'de> for SmallString<A> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        deserializer.deserialize_str(SmallStringVisitor{phantom: PhantomData})
+        deserializer.deserialize_str(SmallStringVisitor {
+            phantom: PhantomData,
+        })
     }
 }
 
 #[cfg(feature = "serde")]
 struct SmallStringVisitor<A> {
-    phantom: PhantomData<A>
+    phantom: PhantomData<A>,
 }
 
 #[cfg(feature = "serde")]
-impl<'de, A: Array<Item=u8>> Visitor<'de> for SmallStringVisitor<A> {
+impl<'de, A: Array<Item = u8>> Visitor<'de> for SmallStringVisitor<A> {
     type Value = SmallString<A>;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -518,28 +512,28 @@ impl<'de, A: Array<Item=u8>> Visitor<'de> for SmallStringVisitor<A> {
     }
 }
 
-impl<A: Array<Item=u8>> From<char> for SmallString<A> {
+impl<A: Array<Item = u8>> From<char> for SmallString<A> {
     #[inline]
     fn from(ch: char) -> SmallString<A> {
         SmallString::from_str(ch.encode_utf8(&mut [0; 4]))
     }
 }
 
-impl<'a, A: Array<Item=u8>> From<&'a str> for SmallString<A> {
+impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A> {
     #[inline]
     fn from(s: &str) -> SmallString<A> {
         SmallString::from_str(s)
     }
 }
 
-impl<A: Array<Item=u8>> From<Box<str>> for SmallString<A> {
+impl<A: Array<Item = u8>> From<Box<str>> for SmallString<A> {
     #[inline]
     fn from(s: Box<str>) -> SmallString<A> {
         SmallString::from_string(s.into())
     }
 }
 
-impl<A: Array<Item=u8>> From<String> for SmallString<A> {
+impl<A: Array<Item = u8>> From<String> for SmallString<A> {
     #[inline]
     fn from(s: String) -> SmallString<A> {
         SmallString::from_string(s)
@@ -548,7 +542,7 @@ impl<A: Array<Item=u8>> From<String> for SmallString<A> {
 
 macro_rules! impl_index_str {
     ($index_type: ty) => {
-        impl<A: Array<Item=u8>> ops::Index<$index_type> for SmallString<A> {
+        impl<A: Array<Item = u8>> ops::Index<$index_type> for SmallString<A> {
             type Output = str;
 
             #[inline]
@@ -557,13 +551,13 @@ macro_rules! impl_index_str {
             }
         }
 
-        impl<A: Array<Item=u8>> ops::IndexMut<$index_type> for SmallString<A> {
+        impl<A: Array<Item = u8>> ops::IndexMut<$index_type> for SmallString<A> {
             #[inline]
             fn index_mut(&mut self, index: $index_type) -> &mut str {
                 &mut self.as_mut_str()[index]
             }
         }
-    }
+    };
 }
 
 impl_index_str!(ops::Range<usize>);
@@ -571,48 +565,48 @@ impl_index_str!(ops::RangeFrom<usize>);
 impl_index_str!(ops::RangeTo<usize>);
 impl_index_str!(ops::RangeFull);
 
-impl<A: Array<Item=u8>> FromIterator<char> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item=char>>(iter: I) -> SmallString<A> {
+impl<A: Array<Item = u8>> FromIterator<char> for SmallString<A> {
+    fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> SmallString<A> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<'a, A: Array<Item=u8>> FromIterator<&'a char> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item=&'a char>>(iter: I) -> SmallString<A> {
+impl<'a, A: Array<Item = u8>> FromIterator<&'a char> for SmallString<A> {
+    fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> SmallString<A> {
         let mut s = SmallString::new();
         s.extend(iter.into_iter().cloned());
         s
     }
 }
 
-impl<'a, A: Array<Item=u8>> FromIterator<Cow<'a, str>> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item=Cow<'a, str>>>(iter: I) -> SmallString<A> {
+impl<'a, A: Array<Item = u8>> FromIterator<Cow<'a, str>> for SmallString<A> {
+    fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> SmallString<A> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<'a, A: Array<Item=u8>> FromIterator<&'a str> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item=&'a str>>(iter: I) -> SmallString<A> {
+impl<'a, A: Array<Item = u8>> FromIterator<&'a str> for SmallString<A> {
+    fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> SmallString<A> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<A: Array<Item=u8>> FromIterator<String> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item=String>>(iter: I) -> SmallString<A> {
+impl<A: Array<Item = u8>> FromIterator<String> for SmallString<A> {
+    fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> SmallString<A> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<A: Array<Item=u8>> Extend<char> for SmallString<A> {
-    fn extend<I: IntoIterator<Item=char>>(&mut self, iter: I) {
+impl<A: Array<Item = u8>> Extend<char> for SmallString<A> {
+    fn extend<I: IntoIterator<Item = char>>(&mut self, iter: I) {
         let iter = iter.into_iter();
         let (lo, _) = iter.size_hint();
 
@@ -624,53 +618,53 @@ impl<A: Array<Item=u8>> Extend<char> for SmallString<A> {
     }
 }
 
-impl<'a, A: Array<Item=u8>> Extend<&'a char> for SmallString<A> {
-    fn extend<I: IntoIterator<Item=&'a char>>(&mut self, iter: I) {
+impl<'a, A: Array<Item = u8>> Extend<&'a char> for SmallString<A> {
+    fn extend<I: IntoIterator<Item = &'a char>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
     }
 }
 
-impl<'a, A: Array<Item=u8>> Extend<Cow<'a, str>> for SmallString<A> {
-    fn extend<I: IntoIterator<Item=Cow<'a, str>>>(&mut self, iter: I) {
+impl<'a, A: Array<Item = u8>> Extend<Cow<'a, str>> for SmallString<A> {
+    fn extend<I: IntoIterator<Item = Cow<'a, str>>>(&mut self, iter: I) {
         for s in iter {
             self.push_str(&s);
         }
     }
 }
 
-impl<'a, A: Array<Item=u8>> Extend<&'a str> for SmallString<A> {
-    fn extend<I: IntoIterator<Item=&'a str>>(&mut self, iter: I) {
+impl<'a, A: Array<Item = u8>> Extend<&'a str> for SmallString<A> {
+    fn extend<I: IntoIterator<Item = &'a str>>(&mut self, iter: I) {
         for s in iter {
             self.push_str(s);
         }
     }
 }
 
-impl<A: Array<Item=u8>> Extend<String> for SmallString<A> {
-    fn extend<I: IntoIterator<Item=String>>(&mut self, iter: I) {
+impl<A: Array<Item = u8>> Extend<String> for SmallString<A> {
+    fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I) {
         for s in iter {
             self.push_str(&s);
         }
     }
 }
 
-impl<A: Array<Item=u8>> fmt::Debug for SmallString<A> {
+impl<A: Array<Item = u8>> fmt::Debug for SmallString<A> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
     }
 }
 
-impl<A: Array<Item=u8>> fmt::Display for SmallString<A> {
+impl<A: Array<Item = u8>> fmt::Display for SmallString<A> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", &**self)
+        fmt::Display::fmt(&**self, f)
     }
 }
 
 macro_rules! eq_str {
     ( $rhs:ty ) => {
-        impl<'a, A: Array<Item=u8>> PartialEq<$rhs> for SmallString<A> {
+        impl<'a, A: Array<Item = u8>> PartialEq<$rhs> for SmallString<A> {
             #[inline]
             fn eq(&self, rhs: &$rhs) -> bool {
                 &self[..] == &rhs[..]
@@ -681,7 +675,7 @@ macro_rules! eq_str {
                 &self[..] != &rhs[..]
             }
         }
-    }
+    };
 }
 
 eq_str!(str);
@@ -689,8 +683,8 @@ eq_str!(&'a str);
 eq_str!(String);
 eq_str!(Cow<'a, str>);
 
-#[cfg(feature = "std")]
-impl<A: Array<Item=u8>> PartialEq<OsStr> for SmallString<A> {
+#[cfg(feature = "ffi")]
+impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A> {
     #[inline]
     fn eq(&self, rhs: &OsStr) -> bool {
         &self[..] == rhs
@@ -702,8 +696,8 @@ impl<A: Array<Item=u8>> PartialEq<OsStr> for SmallString<A> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<'a, A: Array<Item=u8>> PartialEq<&'a OsStr> for SmallString<A> {
+#[cfg(feature = "ffi")]
+impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A> {
     #[inline]
     fn eq(&self, rhs: &&OsStr) -> bool {
         &self[..] == *rhs
@@ -715,8 +709,8 @@ impl<'a, A: Array<Item=u8>> PartialEq<&'a OsStr> for SmallString<A> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<A: Array<Item=u8>> PartialEq<OsString> for SmallString<A> {
+#[cfg(feature = "ffi")]
+impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A> {
     #[inline]
     fn eq(&self, rhs: &OsString) -> bool {
         &self[..] == rhs
@@ -728,8 +722,8 @@ impl<A: Array<Item=u8>> PartialEq<OsString> for SmallString<A> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<'a, A: Array<Item=u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A> {
+#[cfg(feature = "ffi")]
+impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A> {
     #[inline]
     fn eq(&self, rhs: &Cow<OsStr>) -> bool {
         self[..] == **rhs
@@ -742,7 +736,10 @@ impl<'a, A: Array<Item=u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A> {
 }
 
 impl<A, B> PartialEq<SmallString<B>> for SmallString<A>
-        where A: Array<Item=u8>, B: Array<Item=u8> {
+where
+    A: Array<Item = u8>,
+    B: Array<Item = u8>,
+{
     #[inline]
     fn eq(&self, rhs: &SmallString<B>) -> bool {
         &self[..] == &rhs[..]
@@ -754,23 +751,23 @@ impl<A, B> PartialEq<SmallString<B>> for SmallString<A>
     }
 }
 
-impl<A: Array<Item=u8>> Eq for SmallString<A> {}
+impl<A: Array<Item = u8>> Eq for SmallString<A> {}
 
-impl<A: Array<Item=u8>> PartialOrd for SmallString<A> {
+impl<A: Array<Item = u8>> PartialOrd for SmallString<A> {
     #[inline]
     fn partial_cmp(&self, rhs: &SmallString<A>) -> Option<Ordering> {
         self[..].partial_cmp(&rhs[..])
     }
 }
 
-impl<A: Array<Item=u8>> Ord for SmallString<A> {
+impl<A: Array<Item = u8>> Ord for SmallString<A> {
     #[inline]
     fn cmp(&self, rhs: &SmallString<A>) -> Ordering {
         self[..].cmp(&rhs[..])
     }
 }
 
-impl<A: Array<Item=u8>> Hash for SmallString<A> {
+impl<A: Array<Item = u8>> Hash for SmallString<A> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self[..].hash(state)
@@ -815,16 +812,17 @@ impl<'a> DoubleEndedIterator for Drain<'a> {
 /// [`from_buf`]: struct.SmallString.html#method.from_buf
 /// [`SmallString`]: struct.SmallString.html
 #[derive(Debug)]
-pub struct FromUtf8Error<A: Array<Item=u8>> {
+pub struct FromUtf8Error<A: Array<Item = u8>> {
     buf: A,
     error: Utf8Error,
 }
 
-impl<A: Array<Item=u8>> FromUtf8Error<A> {
+impl<A: Array<Item = u8>> FromUtf8Error<A> {
     /// Returns the slice of `[u8]` bytes that were attempted to convert to a `SmallString`.
     #[inline]
     pub fn as_bytes(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.buf.ptr(), A::size()) }
+        let ptr = &self.buf as *const _ as *const u8;
+        unsafe { slice::from_raw_parts(ptr, A::size()) }
     }
 
     /// Returns the byte array that was attempted to convert into a `SmallString`.
@@ -840,33 +838,18 @@ impl<A: Array<Item=u8>> FromUtf8Error<A> {
     }
 }
 
-impl<A: Array<Item=u8>> fmt::Display for FromUtf8Error<A> {
+impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.error, f)
     }
 }
 
-#[cfg(feature = "std")]
-impl<A: Array<Item=u8> + fmt::Debug> ::std::error::Error for FromUtf8Error<A> {
-    #[inline]
-    fn description(&self) -> &str {
-        "invalid utf-8"
-    }
-}
-
 #[cfg(test)]
 mod test {
-    #[cfg(not(feature = "std"))]
-    use alloc::String;
-
-    #[cfg(not(feature = "std"))]
-    use alloc::borrow::ToOwned;
-
-    #[cfg(not(feature = "std"))]
     use alloc::borrow::Cow;
-    #[cfg(feature = "std")]
-    use std::borrow::Cow;
+    use alloc::borrow::ToOwned;
+    use alloc::string::{String, ToString};
 
     use super::SmallString;
 
@@ -914,7 +897,7 @@ mod test {
         assert_eq!(s, Cow::Borrowed("foo"));
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(feature = "ffi")]
     #[test]
     fn test_eq_os_str() {
         use std::ffi::OsStr;
@@ -1059,7 +1042,7 @@ mod test {
 
     #[test]
     fn test_write() {
-        use std::fmt::Write;
+        use core::fmt::Write;
 
         let mut s: SmallString<[u8; 8]> = SmallString::from("foo");
 
@@ -1071,7 +1054,7 @@ mod test {
     #[cfg(feature = "serde")]
     #[test]
     fn test_serde() {
-        use bincode::{serialize, deserialize};
+        use bincode::{deserialize, serialize};
 
         let mut small_str: SmallString<[u8; 4]> = SmallString::from("foo");
 
