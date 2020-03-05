@@ -358,6 +358,25 @@ impl<A: Array<Item = u8>> SmallString<A> {
         unsafe { String::from_utf8_unchecked(self.data.into_vec()) }
     }
 
+    /// Converts the `SmallString` into a `Box<str>`, without reallocating if the
+    /// `SmallString` has already spilled onto the heap.
+    ///
+    /// Note that this will drop excess capacity.
+    #[inline]
+    pub fn into_boxed_str(self) -> Box<str> {
+        self.into_string().into_boxed_str()
+    }
+
+    /// Convert the `SmallString` into `A`, if possible. Otherwise, return `Err(self)`.
+    ///
+    /// This method returns `Err(self)` if the `SmallString` is too short
+    /// (and the `A` contains uninitialized elements) or if the `SmallString` is too long
+    /// (and the elements have been spilled to the heap).
+    #[inline]
+    pub fn into_inner(self) -> Result<A, Self> {
+        self.data.into_inner().map_err(|data| SmallString { data })
+    }
+
     /// Retains only the characters specified by the predicate.
     ///
     /// In other words, removes all characters `c` such that `f(c)` returns `false`.
