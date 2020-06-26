@@ -17,10 +17,11 @@ readme = "README.md"
 
 [features]
 ffi = []
+std = ["serde/std"]
 union = ["smallvec/union"]
 
 [dependencies]
-serde = { version = "1.0", optional = true }
+serde = { version = "1.0", default-features = false, optional = true }
 smallvec = { version = "1.1" }
 
 [dev-dependencies]
