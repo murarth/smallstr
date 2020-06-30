@@ -35,11 +35,23 @@ jobs:
     - name: Test
       run: cargo test --verbose
 
-    - name: Build with features
-      run: cargo build --verbose --features ffi,serde
+    - name: Build with std
+      run: cargo build --verbose --features std,ffi
 
-    - name: Test with features
-      run: cargo test --verbose --features ffi,serde
+    - name: Test with std
+      run: cargo build --verbose --features std,ffi
+
+    - name: Build with serde/no_std
+      run: cargo build --verbose --features serde
+
+    - name: Test with serde/no_std
+      run: cargo test --verbose --features serde
+
+    - name: Build with serde/std
+      run: cargo build --verbose --features serde,std
+
+    - name: Test with serde/std
+      run: cargo test --verbose --features serde,std
 
     - name: Build with union feature
       if: matrix.platform.rust == 'nightly'
