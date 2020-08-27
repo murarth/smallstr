@@ -12,7 +12,7 @@ repository = "https://github.com/murarth/smallstr"
 
 categories = ["data-structures"]
 keywords = ["small", "str", "string"]
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 readme = "README.md"
 
 [features]
