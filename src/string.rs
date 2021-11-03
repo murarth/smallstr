@@ -1,16 +1,14 @@
-use core::borrow::{Borrow, BorrowMut};
-use core::cmp::Ordering;
-use core::fmt;
-use core::hash::{Hash, Hasher};
-use core::iter::FromIterator;
-use core::ops;
-use core::ptr;
-use core::slice;
-use core::str::{self, Chars, Utf8Error};
+use core::{
+    borrow::{Borrow, BorrowMut},
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+    iter::FromIterator,
+    ops, ptr, slice,
+    str::{self, Chars, Utf8Error},
+};
 
-use alloc::borrow::Cow;
-use alloc::boxed::Box;
-use alloc::string::String;
+use alloc::{borrow::Cow, boxed::Box, string::String};
 
 #[cfg(feature = "ffi")]
 use std::ffi::{OsStr, OsString};
@@ -288,8 +286,8 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
         unsafe {
             ptr::copy(
-                self.as_ptr().offset(next as isize),
-                self.as_mut_ptr().offset(idx as isize),
+                self.as_ptr().add(next),
+                self.as_mut_ptr().add(idx),
                 len - next,
             );
             self.data.set_len(len - ch_len);
@@ -329,11 +327,11 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
         unsafe {
             ptr::copy(
-                self.as_ptr().offset(idx as isize),
-                self.as_mut_ptr().offset((idx + amt) as isize),
+                self.as_ptr().add(idx),
+                self.as_mut_ptr().add(idx + amt),
                 len - idx,
             );
-            ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().offset(idx as isize), amt);
+            ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().add(idx), amt);
             self.data.set_len(len + amt);
         }
     }
@@ -396,36 +394,55 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// ```
     #[inline]
     pub fn retain<F: FnMut(char) -> bool>(&mut self, mut f: F) {
+        struct SetLenOnDrop<'a, A: Array<Item = u8>> {
+            s: &'a mut SmallString<A>,
+            idx: usize,
+            del_bytes: usize,
+        }
+
+        impl<'a, A: Array<Item = u8>> Drop for SetLenOnDrop<'a, A> {
+            fn drop(&mut self) {
+                let new_len = self.idx - self.del_bytes;
+                debug_assert!(new_len <= self.s.len());
+                unsafe { self.s.data.set_len(new_len) };
+            }
+        }
+
         let len = self.len();
-        let mut del_bytes = 0;
-        let mut idx = 0;
+        let mut guard = SetLenOnDrop {
+            s: self,
+            idx: 0,
+            del_bytes: 0,
+        };
 
-        while idx < len {
-            let ch = unsafe { self.get_unchecked(idx..len).chars().next().unwrap() };
-
+        while guard.idx < len {
+            let ch = unsafe {
+                guard
+                    .s
+                    .get_unchecked(guard.idx..len)
+                    .chars()
+                    .next()
+                    .unwrap()
+            };
             let ch_len = ch.len_utf8();
 
             if !f(ch) {
-                del_bytes += ch_len;
-            } else if del_bytes > 0 {
+                guard.del_bytes += ch_len;
+            } else if guard.del_bytes > 0 {
                 unsafe {
                     ptr::copy(
-                        self.as_ptr().offset(idx as isize),
-                        self.as_mut_ptr().offset((idx - del_bytes) as isize),
+                        guard.s.data.as_ptr().add(guard.idx),
+                        guard.s.data.as_mut_ptr().add(guard.idx - guard.del_bytes),
                         ch_len,
                     );
                 }
             }
 
             // Point idx to the next char
-            idx += ch_len;
+            guard.idx += ch_len;
         }
 
-        if del_bytes > 0 {
-            unsafe {
-                self.data.set_len(len - del_bytes);
-            }
-        }
+        drop(guard);
     }
 
     fn as_mut_ptr(&mut self) -> *mut u8 {
@@ -866,9 +883,10 @@ impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A> {
 
 #[cfg(test)]
 mod test {
-    use alloc::borrow::Cow;
-    use alloc::borrow::ToOwned;
-    use alloc::string::{String, ToString};
+    use alloc::{
+        borrow::{Cow, ToOwned},
+        string::{String, ToString},
+    };
 
     use super::SmallString;
 
