@@ -22,7 +22,7 @@ union = ["smallvec/union"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
-smallvec = { version = "1.1" }
+smallvec = { version = "1.8.0" }
 
 [dev-dependencies]
 bincode = "1.0"
