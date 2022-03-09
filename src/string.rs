@@ -479,6 +479,20 @@ impl<A: Array<Item = u8>> BorrowMut<str> for SmallString<A> {
     }
 }
 
+impl<A: Array<Item = u8>> AsRef<[u8]> for SmallString<A> {
+    #[inline]
+    fn as_ref(&self) -> &[u8] {
+        self.data.as_ref()
+    }
+}
+
+impl<A: Array<Item = u8>> Borrow<[u8]> for SmallString<A> {
+    #[inline]
+    fn borrow(&self) -> &[u8] {
+        self.data.borrow()
+    }
+}
+
 impl<A: Array<Item = u8>> fmt::Write for SmallString<A> {
     #[inline]
     fn write_str(&mut self, s: &str) -> fmt::Result {
