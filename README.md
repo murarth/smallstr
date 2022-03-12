@@ -10,7 +10,7 @@ To include `smallstr` in your project, add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-smallstr = "0.2"
+smallstr = "0.3"
 ```
 
 ## License
