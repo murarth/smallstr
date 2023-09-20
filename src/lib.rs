@@ -29,7 +29,7 @@
 //! ## `union` feature
 //!
 //! This feature will enable the `union` feature in `smallvec`, which reduces the size of
-//! a `SmallString` instance. This feature requires a nightly compiler.
+//! a `SmallString` instance. This feature requires Rust 1.49 or newer.
 
 #![cfg_attr(not(any(feature = "ffi", feature = "std")), no_std)]
 #![deny(missing_docs)]
