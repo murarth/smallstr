@@ -34,7 +34,7 @@ pub struct SmallString<const N: usize> {
 impl<const N: usize> SmallString<N> {
     /// Construct an empty string.
     #[inline]
-    pub fn new() -> SmallString<N> {
+    pub const fn new() -> SmallString<N> {
         SmallString {
             data: SmallVec::new(),
         }
@@ -94,7 +94,7 @@ impl<const N: usize> SmallString<N> {
     /// memory unsafety issues, as the Rust standard library functions assume
     /// that `&str`s are valid UTF-8.
     #[inline]
-    pub unsafe fn from_buf_unchecked(buf: [u8; N]) -> SmallString<N> {
+    pub const unsafe fn from_buf_unchecked(buf: [u8; N]) -> SmallString<N> {
         SmallString {
             data: SmallVec::from_buf(buf),
         }
@@ -102,13 +102,13 @@ impl<const N: usize> SmallString<N> {
 
     /// The maximum number of bytes this string can hold inline.
     #[inline]
-    pub fn inline_size(&self) -> usize {
+    pub const fn inline_size(&self) -> usize {
         N
     }
 
     /// Returns the length of this string, in bytes.
     #[inline]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
@@ -120,13 +120,13 @@ impl<const N: usize> SmallString<N> {
 
     /// Returns the number of bytes this string can hold without reallocating.
     #[inline]
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.data.capacity()
     }
 
     /// Returns `true` if the data has spilled into a separate heap-allocated buffer.
     #[inline]
-    pub fn spilled(&self) -> bool {
+    pub const fn spilled(&self) -> bool {
         self.data.spilled()
     }
 
