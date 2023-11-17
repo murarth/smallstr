@@ -18,11 +18,10 @@ readme = "README.md"
 [features]
 ffi = []
 std = ["serde/std"]
-union = ["smallvec/union"]
 
 [dependencies]
 serde = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
-smallvec = { version = "1.1" }
+smallvec = { version = "2.0.0-alpha.1" }
 
 [dev-dependencies]
 bincode = "1.0"

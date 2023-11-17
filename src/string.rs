@@ -21,20 +21,20 @@ use serde::{
     ser::{Serialize, Serializer},
 };
 
-use smallvec::{Array, SmallVec};
+use smallvec::SmallVec;
 
 /// A `String`-like container that can store a small number of bytes inline.
 ///
-/// `SmallString` uses a `SmallVec<[u8; N]>` as its internal storage.
+/// `SmallString` uses a `SmallVec<u8, N>` as its internal storage.
 #[derive(Clone, Default)]
-pub struct SmallString<A: Array<Item = u8>> {
-    data: SmallVec<A>,
+pub struct SmallString<const N: usize> {
+    data: SmallVec<u8, N>,
 }
 
-impl<A: Array<Item = u8>> SmallString<A> {
+impl<const N: usize> SmallString<N> {
     /// Construct an empty string.
     #[inline]
-    pub fn new() -> SmallString<A> {
+    pub const fn new() -> SmallString<N> {
         SmallString {
             data: SmallVec::new(),
         }
@@ -45,7 +45,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     ///
     /// Will create a heap allocation only if `n` is larger than the inline capacity.
     #[inline]
-    pub fn with_capacity(n: usize) -> SmallString<A> {
+    pub fn with_capacity(n: usize) -> SmallString<N> {
         SmallString {
             data: SmallVec::with_capacity(n),
         }
@@ -53,7 +53,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
     /// Construct a `SmallString` by copying data from a `&str`.
     #[inline]
-    pub fn from_str(s: &str) -> SmallString<A> {
+    pub fn from_str(s: &str) -> SmallString<N> {
         SmallString {
             data: SmallVec::from_slice(s.as_bytes()),
         }
@@ -61,7 +61,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
     /// Construct a `SmallString` by using an existing allocation.
     #[inline]
-    pub fn from_string(s: String) -> SmallString<A> {
+    pub fn from_string(s: String) -> SmallString<N> {
         SmallString {
             data: SmallVec::from_vec(s.into_bytes()),
         }
@@ -71,7 +71,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     ///
     /// If the provided byte array is not valid UTF-8, an error is returned.
     #[inline]
-    pub fn from_buf(buf: A) -> Result<SmallString<A>, FromUtf8Error<A>> {
+    pub fn from_buf(buf: [u8; N]) -> Result<SmallString<N>, FromUtf8Error<N>> {
         let data = SmallVec::from_buf(buf);
 
         match str::from_utf8(&data) {
@@ -94,7 +94,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// memory unsafety issues, as the Rust standard library functions assume
     /// that `&str`s are valid UTF-8.
     #[inline]
-    pub unsafe fn from_buf_unchecked(buf: A) -> SmallString<A> {
+    pub const unsafe fn from_buf_unchecked(buf: [u8; N]) -> SmallString<N> {
         SmallString {
             data: SmallVec::from_buf(buf),
         }
@@ -102,13 +102,13 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
     /// The maximum number of bytes this string can hold inline.
     #[inline]
-    pub fn inline_size(&self) -> usize {
-        A::size()
+    pub const fn inline_size(&self) -> usize {
+        N
     }
 
     /// Returns the length of this string, in bytes.
     #[inline]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
@@ -120,13 +120,13 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
     /// Returns the number of bytes this string can hold without reallocating.
     #[inline]
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.data.capacity()
     }
 
     /// Returns `true` if the data has spilled into a separate heap-allocated buffer.
     #[inline]
-    pub fn spilled(&self) -> bool {
+    pub const fn spilled(&self) -> bool {
         self.data.spilled()
     }
 
@@ -153,7 +153,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// ```
     /// use smallstr::SmallString;
     ///
-    /// let mut s: SmallString<[u8; 8]> = SmallString::from("foo");
+    /// let mut s: SmallString<8> = SmallString::from("foo");
     ///
     /// s.push('x');
     ///
@@ -174,7 +174,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// ```
     /// use smallstr::SmallString;
     ///
-    /// let mut s: SmallString<[u8; 8]> = SmallString::from("foo");
+    /// let mut s: SmallString<8> = SmallString::from("foo");
     ///
     /// s.push_str("bar");
     ///
@@ -345,7 +345,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// memory unsafety issues, as the Rust standard library functions assume
     /// that `&str`s are valid UTF-8.
     #[inline]
-    pub unsafe fn as_mut_vec(&mut self) -> &mut SmallVec<A> {
+    pub unsafe fn as_mut_vec(&mut self) -> &mut SmallVec<u8, N> {
         &mut self.data
     }
 
@@ -365,13 +365,13 @@ impl<A: Array<Item = u8>> SmallString<A> {
         self.into_string().into_boxed_str()
     }
 
-    /// Convert the `SmallString` into `A`, if possible. Otherwise, return `Err(self)`.
+    /// Convert the `SmallString` into `[u8; N]`, if possible. Otherwise, return `Err(self)`.
     ///
     /// This method returns `Err(self)` if the `SmallString` is too short
-    /// (and the `A` contains uninitialized elements) or if the `SmallString` is too long
+    /// (and the `[u8; N]` contains uninitialized elements) or if the `SmallString` is too long
     /// (and the elements have been spilled to the heap).
     #[inline]
-    pub fn into_inner(self) -> Result<A, Self> {
+    pub fn into_inner(self) -> Result<[u8; N], Self> {
         self.data.into_inner().map_err(|data| SmallString { data })
     }
 
@@ -386,7 +386,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// ```
     /// use smallstr::SmallString;
     ///
-    /// let mut s: SmallString<[u8; 16]> = SmallString::from("f_o_ob_ar");
+    /// let mut s: SmallString<16> = SmallString::from("f_o_ob_ar");
     ///
     /// s.retain(|c| c != '_');
     ///
@@ -394,13 +394,13 @@ impl<A: Array<Item = u8>> SmallString<A> {
     /// ```
     #[inline]
     pub fn retain<F: FnMut(char) -> bool>(&mut self, mut f: F) {
-        struct SetLenOnDrop<'a, A: Array<Item = u8>> {
-            s: &'a mut SmallString<A>,
+        struct SetLenOnDrop<'a, const N: usize> {
+            s: &'a mut SmallString<N>,
             idx: usize,
             del_bytes: usize,
         }
 
-        impl<'a, A: Array<Item = u8>> Drop for SetLenOnDrop<'a, A> {
+        impl<'a, const N: usize> Drop for SetLenOnDrop<'a, N> {
             fn drop(&mut self) {
                 let new_len = self.idx - self.del_bytes;
                 debug_assert!(new_len <= self.s.len());
@@ -450,7 +450,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> ops::Deref for SmallString<A> {
+impl<const N: usize> ops::Deref for SmallString<N> {
     type Target = str;
 
     #[inline]
@@ -460,7 +460,7 @@ impl<A: Array<Item = u8>> ops::Deref for SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> ops::DerefMut for SmallString<A> {
+impl<const N: usize> ops::DerefMut for SmallString<N> {
     #[inline]
     fn deref_mut(&mut self) -> &mut str {
         let bytes: &mut [u8] = &mut self.data;
@@ -468,49 +468,49 @@ impl<A: Array<Item = u8>> ops::DerefMut for SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> AsRef<str> for SmallString<A> {
+impl<const N: usize> AsRef<str> for SmallString<N> {
     #[inline]
     fn as_ref(&self) -> &str {
         self
     }
 }
 
-impl<A: Array<Item = u8>> AsMut<str> for SmallString<A> {
+impl<const N: usize> AsMut<str> for SmallString<N> {
     #[inline]
     fn as_mut(&mut self) -> &mut str {
         self
     }
 }
 
-impl<A: Array<Item = u8>> Borrow<str> for SmallString<A> {
+impl<const N: usize> Borrow<str> for SmallString<N> {
     #[inline]
     fn borrow(&self) -> &str {
         self
     }
 }
 
-impl<A: Array<Item = u8>> BorrowMut<str> for SmallString<A> {
+impl<const N: usize> BorrowMut<str> for SmallString<N> {
     #[inline]
     fn borrow_mut(&mut self) -> &mut str {
         self
     }
 }
 
-impl<A: Array<Item = u8>> AsRef<[u8]> for SmallString<A> {
+impl<const N: usize> AsRef<[u8]> for SmallString<N> {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.data.as_ref()
     }
 }
 
-impl<A: Array<Item = u8>> Borrow<[u8]> for SmallString<A> {
+impl<const N: usize> Borrow<[u8]> for SmallString<N> {
     #[inline]
     fn borrow(&self) -> &[u8] {
         self.data.borrow()
     }
 }
 
-impl<A: Array<Item = u8>> fmt::Write for SmallString<A> {
+impl<const N: usize> fmt::Write for SmallString<N> {
     #[inline]
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.push_str(s);
@@ -525,14 +525,14 @@ impl<A: Array<Item = u8>> fmt::Write for SmallString<A> {
 }
 
 #[cfg(feature = "serde")]
-impl<A: Array<Item = u8>> Serialize for SmallString<A> {
+impl<const N: usize> Serialize for SmallString<N> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(self)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, A: Array<Item = u8>> Deserialize<'de> for SmallString<A> {
+impl<'de, const N: usize> Deserialize<'de> for SmallString<N> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         deserializer.deserialize_str(SmallStringVisitor {
             phantom: PhantomData,
@@ -541,13 +541,13 @@ impl<'de, A: Array<Item = u8>> Deserialize<'de> for SmallString<A> {
 }
 
 #[cfg(feature = "serde")]
-struct SmallStringVisitor<A> {
-    phantom: PhantomData<A>,
+struct SmallStringVisitor<const N: usize> {
+    phantom: PhantomData<[u8; N]>,
 }
 
 #[cfg(feature = "serde")]
-impl<'de, A: Array<Item = u8>> Visitor<'de> for SmallStringVisitor<A> {
-    type Value = SmallString<A>;
+impl<'de, const N: usize> Visitor<'de> for SmallStringVisitor<N> {
+    type Value = SmallString<N>;
 
     fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("a string")
@@ -562,37 +562,37 @@ impl<'de, A: Array<Item = u8>> Visitor<'de> for SmallStringVisitor<A> {
     }
 }
 
-impl<A: Array<Item = u8>> From<char> for SmallString<A> {
+impl<const N: usize> From<char> for SmallString<N> {
     #[inline]
-    fn from(ch: char) -> SmallString<A> {
+    fn from(ch: char) -> SmallString<N> {
         SmallString::from_str(ch.encode_utf8(&mut [0; 4]))
     }
 }
 
-impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A> {
+impl<'a, const N: usize> From<&'a str> for SmallString<N> {
     #[inline]
-    fn from(s: &str) -> SmallString<A> {
+    fn from(s: &str) -> SmallString<N> {
         SmallString::from_str(s)
     }
 }
 
-impl<A: Array<Item = u8>> From<Box<str>> for SmallString<A> {
+impl<const N: usize> From<Box<str>> for SmallString<N> {
     #[inline]
-    fn from(s: Box<str>) -> SmallString<A> {
+    fn from(s: Box<str>) -> SmallString<N> {
         SmallString::from_string(s.into())
     }
 }
 
-impl<A: Array<Item = u8>> From<String> for SmallString<A> {
+impl<const N: usize> From<String> for SmallString<N> {
     #[inline]
-    fn from(s: String) -> SmallString<A> {
+    fn from(s: String) -> SmallString<N> {
         SmallString::from_string(s)
     }
 }
 
 macro_rules! impl_index_str {
     ($index_type: ty) => {
-        impl<A: Array<Item = u8>> ops::Index<$index_type> for SmallString<A> {
+        impl<const N: usize> ops::Index<$index_type> for SmallString<N> {
             type Output = str;
 
             #[inline]
@@ -601,7 +601,7 @@ macro_rules! impl_index_str {
             }
         }
 
-        impl<A: Array<Item = u8>> ops::IndexMut<$index_type> for SmallString<A> {
+        impl<const N: usize> ops::IndexMut<$index_type> for SmallString<N> {
             #[inline]
             fn index_mut(&mut self, index: $index_type) -> &mut str {
                 &mut self.as_mut_str()[index]
@@ -615,47 +615,47 @@ impl_index_str!(ops::RangeFrom<usize>);
 impl_index_str!(ops::RangeTo<usize>);
 impl_index_str!(ops::RangeFull);
 
-impl<A: Array<Item = u8>> FromIterator<char> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> SmallString<A> {
+impl<const N: usize> FromIterator<char> for SmallString<N> {
+    fn from_iter<I: IntoIterator<Item = char>>(iter: I) -> SmallString<N> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<'a, A: Array<Item = u8>> FromIterator<&'a char> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> SmallString<A> {
+impl<'a, const N: usize> FromIterator<&'a char> for SmallString<N> {
+    fn from_iter<I: IntoIterator<Item = &'a char>>(iter: I) -> SmallString<N> {
         let mut s = SmallString::new();
         s.extend(iter.into_iter().cloned());
         s
     }
 }
 
-impl<'a, A: Array<Item = u8>> FromIterator<Cow<'a, str>> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> SmallString<A> {
+impl<'a, const N: usize> FromIterator<Cow<'a, str>> for SmallString<N> {
+    fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> SmallString<N> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<'a, A: Array<Item = u8>> FromIterator<&'a str> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> SmallString<A> {
+impl<'a, const N: usize> FromIterator<&'a str> for SmallString<N> {
+    fn from_iter<I: IntoIterator<Item = &'a str>>(iter: I) -> SmallString<N> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<A: Array<Item = u8>> FromIterator<String> for SmallString<A> {
-    fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> SmallString<A> {
+impl<const N: usize> FromIterator<String> for SmallString<N> {
+    fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> SmallString<N> {
         let mut s = SmallString::new();
         s.extend(iter);
         s
     }
 }
 
-impl<A: Array<Item = u8>> Extend<char> for SmallString<A> {
+impl<const N: usize> Extend<char> for SmallString<N> {
     fn extend<I: IntoIterator<Item = char>>(&mut self, iter: I) {
         let iter = iter.into_iter();
         let (lo, _) = iter.size_hint();
@@ -668,13 +668,13 @@ impl<A: Array<Item = u8>> Extend<char> for SmallString<A> {
     }
 }
 
-impl<'a, A: Array<Item = u8>> Extend<&'a char> for SmallString<A> {
+impl<'a, const N: usize> Extend<&'a char> for SmallString<N> {
     fn extend<I: IntoIterator<Item = &'a char>>(&mut self, iter: I) {
         self.extend(iter.into_iter().cloned());
     }
 }
 
-impl<'a, A: Array<Item = u8>> Extend<Cow<'a, str>> for SmallString<A> {
+impl<'a, const N: usize> Extend<Cow<'a, str>> for SmallString<N> {
     fn extend<I: IntoIterator<Item = Cow<'a, str>>>(&mut self, iter: I) {
         for s in iter {
             self.push_str(&s);
@@ -682,7 +682,7 @@ impl<'a, A: Array<Item = u8>> Extend<Cow<'a, str>> for SmallString<A> {
     }
 }
 
-impl<'a, A: Array<Item = u8>> Extend<&'a str> for SmallString<A> {
+impl<'a, const N: usize> Extend<&'a str> for SmallString<N> {
     fn extend<I: IntoIterator<Item = &'a str>>(&mut self, iter: I) {
         for s in iter {
             self.push_str(s);
@@ -690,7 +690,7 @@ impl<'a, A: Array<Item = u8>> Extend<&'a str> for SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> Extend<String> for SmallString<A> {
+impl<const N: usize> Extend<String> for SmallString<N> {
     fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I) {
         for s in iter {
             self.push_str(&s);
@@ -698,14 +698,14 @@ impl<A: Array<Item = u8>> Extend<String> for SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> fmt::Debug for SmallString<A> {
+impl<const N: usize> fmt::Debug for SmallString<N> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(&**self, f)
     }
 }
 
-impl<A: Array<Item = u8>> fmt::Display for SmallString<A> {
+impl<const N: usize> fmt::Display for SmallString<N> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&**self, f)
@@ -714,7 +714,7 @@ impl<A: Array<Item = u8>> fmt::Display for SmallString<A> {
 
 macro_rules! eq_str {
     ( $rhs:ty ) => {
-        impl<'a, A: Array<Item = u8>> PartialEq<$rhs> for SmallString<A> {
+        impl<'a, const N: usize> PartialEq<$rhs> for SmallString<N> {
             #[inline]
             fn eq(&self, rhs: &$rhs) -> bool {
                 &self[..] == &rhs[..]
@@ -734,7 +734,7 @@ eq_str!(String);
 eq_str!(Cow<'a, str>);
 
 #[cfg(feature = "ffi")]
-impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A> {
+impl<const N: usize> PartialEq<OsStr> for SmallString<N> {
     #[inline]
     fn eq(&self, rhs: &OsStr) -> bool {
         &self[..] == rhs
@@ -747,7 +747,7 @@ impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A> {
 }
 
 #[cfg(feature = "ffi")]
-impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A> {
+impl<'a, const N: usize> PartialEq<&'a OsStr> for SmallString<N> {
     #[inline]
     fn eq(&self, rhs: &&OsStr) -> bool {
         &self[..] == *rhs
@@ -760,7 +760,7 @@ impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A> {
 }
 
 #[cfg(feature = "ffi")]
-impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A> {
+impl<const N: usize> PartialEq<OsString> for SmallString<N> {
     #[inline]
     fn eq(&self, rhs: &OsString) -> bool {
         &self[..] == rhs
@@ -773,7 +773,7 @@ impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A> {
 }
 
 #[cfg(feature = "ffi")]
-impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A> {
+impl<'a, const N: usize> PartialEq<Cow<'a, OsStr>> for SmallString<N> {
     #[inline]
     fn eq(&self, rhs: &Cow<OsStr>) -> bool {
         self[..] == **rhs
@@ -785,39 +785,35 @@ impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A> {
     }
 }
 
-impl<A, B> PartialEq<SmallString<B>> for SmallString<A>
-where
-    A: Array<Item = u8>,
-    B: Array<Item = u8>,
-{
+impl<const N1: usize, const N2: usize> PartialEq<SmallString<N2>> for SmallString<N1> {
     #[inline]
-    fn eq(&self, rhs: &SmallString<B>) -> bool {
+    fn eq(&self, rhs: &SmallString<N2>) -> bool {
         &self[..] == &rhs[..]
     }
 
     #[inline]
-    fn ne(&self, rhs: &SmallString<B>) -> bool {
+    fn ne(&self, rhs: &SmallString<N2>) -> bool {
         &self[..] != &rhs[..]
     }
 }
 
-impl<A: Array<Item = u8>> Eq for SmallString<A> {}
+impl<const N: usize> Eq for SmallString<N> {}
 
-impl<A: Array<Item = u8>> PartialOrd for SmallString<A> {
+impl<const N: usize> PartialOrd for SmallString<N> {
     #[inline]
-    fn partial_cmp(&self, rhs: &SmallString<A>) -> Option<Ordering> {
+    fn partial_cmp(&self, rhs: &SmallString<N>) -> Option<Ordering> {
         self[..].partial_cmp(&rhs[..])
     }
 }
 
-impl<A: Array<Item = u8>> Ord for SmallString<A> {
+impl<const N: usize> Ord for SmallString<N> {
     #[inline]
-    fn cmp(&self, rhs: &SmallString<A>) -> Ordering {
+    fn cmp(&self, rhs: &SmallString<N>) -> Ordering {
         self[..].cmp(&rhs[..])
     }
 }
 
-impl<A: Array<Item = u8>> Hash for SmallString<A> {
+impl<const N: usize> Hash for SmallString<N> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self[..].hash(state)
@@ -862,22 +858,22 @@ impl<'a> DoubleEndedIterator for Drain<'a> {
 /// [`from_buf`]: struct.SmallString.html#method.from_buf
 /// [`SmallString`]: struct.SmallString.html
 #[derive(Debug)]
-pub struct FromUtf8Error<A: Array<Item = u8>> {
-    buf: A,
+pub struct FromUtf8Error<const N: usize> {
+    buf: [u8; N],
     error: Utf8Error,
 }
 
-impl<A: Array<Item = u8>> FromUtf8Error<A> {
+impl<const N: usize> FromUtf8Error<N> {
     /// Returns the slice of `[u8]` bytes that were attempted to convert to a `SmallString`.
     #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         let ptr = &self.buf as *const _ as *const u8;
-        unsafe { slice::from_raw_parts(ptr, A::size()) }
+        unsafe { slice::from_raw_parts(ptr, N) }
     }
 
     /// Returns the byte array that was attempted to convert into a `SmallString`.
     #[inline]
-    pub fn into_buf(self) -> A {
+    pub fn into_buf(self) -> [u8; N] {
         self.buf
     }
 
@@ -888,7 +884,7 @@ impl<A: Array<Item = u8>> FromUtf8Error<A> {
     }
 }
 
-impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A> {
+impl<const N: usize> fmt::Display for FromUtf8Error<N> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.error, f)
@@ -906,7 +902,7 @@ mod test {
 
     #[test]
     fn test_drain() {
-        let mut s: SmallString<[u8; 2]> = SmallString::new();
+        let mut s: SmallString<2> = SmallString::new();
 
         s.push('a');
         assert_eq!(s.drain().collect::<String>(), "a");
@@ -923,7 +919,7 @@ mod test {
 
     #[test]
     fn test_drain_rev() {
-        let mut s: SmallString<[u8; 2]> = SmallString::new();
+        let mut s: SmallString<2> = SmallString::new();
 
         s.push('a');
         assert_eq!(s.drain().rev().collect::<String>(), "a");
@@ -940,7 +936,7 @@ mod test {
 
     #[test]
     fn test_eq() {
-        let s: SmallString<[u8; 4]> = SmallString::from("foo");
+        let s: SmallString<4> = SmallString::from("foo");
 
         assert_eq!(s, *"foo");
         assert_eq!(s, "foo");
@@ -953,7 +949,7 @@ mod test {
     fn test_eq_os_str() {
         use std::ffi::OsStr;
 
-        let s: SmallString<[u8; 4]> = SmallString::from("foo");
+        let s: SmallString<4> = SmallString::from("foo");
         let os_s: &OsStr = "foo".as_ref();
 
         assert_eq!(s, os_s);
@@ -964,15 +960,15 @@ mod test {
 
     #[test]
     fn test_from_buf() {
-        let s: SmallString<[u8; 2]> = SmallString::from_buf([206, 177]).unwrap();
+        let s: SmallString<2> = SmallString::from_buf([206, 177]).unwrap();
         assert_eq!(s, "α");
 
-        assert!(SmallString::<[u8; 2]>::from_buf([206, 0]).is_err());
+        assert!(SmallString::<2>::from_buf([206, 0]).is_err());
     }
 
     #[test]
     fn test_insert() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("abc");
+        let mut s: SmallString<8> = SmallString::from("abc");
 
         s.insert(1, 'x');
         assert_eq!(s, "axbc");
@@ -987,32 +983,32 @@ mod test {
     #[test]
     #[should_panic]
     fn test_insert_panic() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("αβγ");
+        let mut s: SmallString<8> = SmallString::from("αβγ");
 
         s.insert(1, 'x');
     }
 
     #[test]
     fn test_into_string() {
-        let s: SmallString<[u8; 2]> = SmallString::from("foo");
+        let s: SmallString<2> = SmallString::from("foo");
         assert_eq!(s.into_string(), "foo");
 
-        let s: SmallString<[u8; 8]> = SmallString::from("foo");
+        let s: SmallString<8> = SmallString::from("foo");
         assert_eq!(s.into_string(), "foo");
     }
 
     #[test]
     fn test_to_string() {
-        let s: SmallString<[u8; 2]> = SmallString::from("foo");
+        let s: SmallString<2> = SmallString::from("foo");
         assert_eq!(s.to_string(), "foo");
 
-        let s: SmallString<[u8; 8]> = SmallString::from("foo");
+        let s: SmallString<8> = SmallString::from("foo");
         assert_eq!(s.to_string(), "foo");
     }
 
     #[test]
     fn test_pop() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("αβγ");
+        let mut s: SmallString<8> = SmallString::from("αβγ");
 
         assert_eq!(s.pop(), Some('γ'));
         assert_eq!(s.pop(), Some('β'));
@@ -1022,7 +1018,7 @@ mod test {
 
     #[test]
     fn test_remove() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("αβγ");
+        let mut s: SmallString<8> = SmallString::from("αβγ");
 
         assert_eq!(s.remove(2), 'β');
         assert_eq!(s, "αγ");
@@ -1037,7 +1033,7 @@ mod test {
     #[test]
     #[should_panic]
     fn test_remove_panic_0() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("foo");
+        let mut s: SmallString<8> = SmallString::from("foo");
 
         // Attempt to remove at the end
         s.remove(3);
@@ -1046,7 +1042,7 @@ mod test {
     #[test]
     #[should_panic]
     fn test_remove_panic_1() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("αβγ");
+        let mut s: SmallString<8> = SmallString::from("αβγ");
 
         // Attempt to remove mid-character
         s.remove(1);
@@ -1054,7 +1050,7 @@ mod test {
 
     #[test]
     fn test_retain() {
-        let mut s: SmallString<[u8; 8]> = SmallString::from("α_β_γ");
+        let mut s: SmallString<8> = SmallString::from("α_β_γ");
 
         s.retain(|_| true);
         assert_eq!(s, "α_β_γ");
@@ -1074,7 +1070,7 @@ mod test {
 
     #[test]
     fn test_truncate() {
-        let mut s: SmallString<[u8; 2]> = SmallString::from("foobar");
+        let mut s: SmallString<2> = SmallString::from("foobar");
 
         s.truncate(6);
         assert_eq!(s, "foobar");
@@ -1086,7 +1082,7 @@ mod test {
     #[test]
     #[should_panic]
     fn test_truncate_panic() {
-        let mut s: SmallString<[u8; 2]> = SmallString::from("α");
+        let mut s: SmallString<2> = SmallString::from("α");
 
         s.truncate(1);
     }
@@ -1095,7 +1091,7 @@ mod test {
     fn test_write() {
         use core::fmt::Write;
 
-        let mut s: SmallString<[u8; 8]> = SmallString::from("foo");
+        let mut s: SmallString<8> = SmallString::from("foo");
 
         write!(s, "bar").unwrap();
 
@@ -1107,10 +1103,10 @@ mod test {
     fn test_serde() {
         use bincode::{deserialize, serialize};
 
-        let mut small_str: SmallString<[u8; 4]> = SmallString::from("foo");
+        let mut small_str: SmallString<4> = SmallString::from("foo");
 
         let encoded = serialize(&small_str).unwrap();
-        let decoded: SmallString<[u8; 4]> = deserialize(&encoded).unwrap();
+        let decoded: SmallString<4> = deserialize(&encoded).unwrap();
 
         assert_eq!(small_str, decoded);
 
@@ -1119,7 +1115,7 @@ mod test {
 
         // Check again after spilling.
         let encoded = serialize(&small_str).unwrap();
-        let decoded: SmallString<[u8; 4]> = deserialize(&encoded).unwrap();
+        let decoded: SmallString<4> = deserialize(&encoded).unwrap();
 
         assert_eq!(small_str, decoded);
     }
