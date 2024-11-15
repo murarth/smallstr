@@ -2,7 +2,6 @@ use core::{
     borrow::{Borrow, BorrowMut},
     cmp::Ordering,
     fmt,
-    hash::{Hash, Hasher},
     iter::FromIterator,
     ops, ptr, slice,
     str::{self, Chars, Utf8Error},
@@ -98,6 +97,35 @@ impl<A: Array<Item = u8>> SmallString<A> {
         SmallString {
             data: SmallVec::from_buf(buf),
         }
+    }
+
+    /// Constructs a new `SmallString` from `SmallVec` using UTF-8 bytes.
+    ///
+    /// If the provided `SmallVec` is not valid UTF-8, an error is returned.
+    #[inline]
+    pub fn from_small_vec(data: SmallVec<A>) -> Result<SmallString<A>, FromUtf8Error<A>> {
+        match str::from_utf8(&data) {
+            Ok(_) => Ok(SmallString { data }),
+            Err(error) => {
+                let buf = data.into_inner().ok().unwrap();
+
+                Err(FromUtf8Error { buf, error })
+            }
+        }
+    }
+
+    /// Constructs a new `SmallString` on the stack using the provided `SmallVec`
+    /// without checking that the array contains valid UTF-8.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it does not check that the bytes passed
+    /// to it are valid UTF-8. If this constraint is violated, it may cause
+    /// memory unsafety issues, as the Rust standard library functions assume
+    /// that `&str`s are valid UTF-8.
+    #[inline]
+    pub unsafe fn from_small_vec_unchecked(data: SmallVec<A>) -> SmallString<A> {
+        SmallString { data }
     }
 
     /// The maximum number of bytes this string can hold inline.
@@ -373,6 +401,12 @@ impl<A: Array<Item = u8>> SmallString<A> {
     #[inline]
     pub fn into_inner(self) -> Result<A, Self> {
         self.data.into_inner().map_err(|data| SmallString { data })
+    }
+
+    /// Convert the `SmallString` into inner `SmallVec`.
+    #[inline]
+    pub fn into_small_vec(self) -> SmallVec<A> {
+        self.data
     }
 
     /// Retains only the characters specified by the predicate.
@@ -819,12 +853,14 @@ impl<A: Array<Item = u8>> Ord for SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> Hash for SmallString<A> {
+// Removed because of dublicating implementation + clippy error.
+// Watch `clippy::impl_hash_borrow_with_str_and_bytes`
+/* impl<A: Array<Item = u8>> Hash for SmallString<A> {
     #[inline]
     fn hash<H: Hasher>(&self, state: &mut H) {
         self[..].hash(state)
     }
-}
+} */
 
 /// A draining iterator for `SmallString`.
 ///
