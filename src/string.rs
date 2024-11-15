@@ -503,13 +503,6 @@ impl<A: Array<Item = u8>> AsRef<[u8]> for SmallString<A> {
     }
 }
 
-impl<A: Array<Item = u8>> Borrow<[u8]> for SmallString<A> {
-    #[inline]
-    fn borrow(&self) -> &[u8] {
-        self.data.borrow()
-    }
-}
-
 impl<A: Array<Item = u8>> fmt::Write for SmallString<A> {
     #[inline]
     fn write_str(&mut self, s: &str) -> fmt::Result {
