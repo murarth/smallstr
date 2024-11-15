@@ -590,6 +590,15 @@ impl<A: Array<Item = u8>> From<String> for SmallString<A> {
     }
 }
 
+impl<'a, A: Array<Item = u8>> From<Cow<'a, str>> for SmallString<A> {
+    fn from(value: Cow<'a, str>) -> Self {
+        match value {
+            Cow::Borrowed(s) => Self::from_str(s),
+            Cow::Owned(s) => Self::from_string(s),
+        }
+    }
+}
+
 macro_rules! impl_index_str {
     ($index_type: ty) => {
         impl<A: Array<Item = u8>> ops::Index<$index_type> for SmallString<A> {
