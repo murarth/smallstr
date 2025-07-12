@@ -325,13 +325,11 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
         self.data.reserve(amt);
 
+        let ptr = self.as_mut_ptr();
+
         unsafe {
-            ptr::copy(
-                self.as_ptr().add(idx),
-                self.as_mut_ptr().add(idx + amt),
-                len - idx,
-            );
-            ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().add(idx), amt);
+            ptr::copy(ptr.add(idx), ptr.add(idx + amt), len - idx);
+            ptr::copy_nonoverlapping(s.as_ptr(), ptr.add(idx), amt);
             self.data.set_len(len + amt);
         }
     }
