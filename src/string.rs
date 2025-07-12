@@ -285,11 +285,9 @@ impl<A: Array<Item = u8>> SmallString<A> {
         let len = self.len();
 
         unsafe {
-            ptr::copy(
-                self.as_ptr().add(next),
-                self.as_mut_ptr().add(idx),
-                len - next,
-            );
+            let ptr = self.as_mut_ptr();
+
+            ptr::copy(ptr.add(next), ptr.add(idx), len - next);
             self.data.set_len(len - ch_len);
         }
 
