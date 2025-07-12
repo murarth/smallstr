@@ -445,6 +445,10 @@ impl<A: Array<Item = u8>> SmallString<A> {
         drop(guard);
     }
 
+    fn as_ptr(&mut self) -> *const u8 {
+        self.data.as_ptr()
+    }
+
     fn as_mut_ptr(&mut self) -> *mut u8 {
         self.data.as_mut_ptr()
     }
