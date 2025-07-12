@@ -446,7 +446,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     }
 
     fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.as_ptr() as *mut u8
+        self.data.as_mut_ptr()
     }
 }
 
