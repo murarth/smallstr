@@ -427,10 +427,12 @@ impl<A: Array<Item = u8>> SmallString<A> {
             if !f(ch) {
                 guard.del_bytes += ch_len;
             } else if guard.del_bytes > 0 {
+                let ptr = guard.s.as_mut_ptr();
+
                 unsafe {
                     ptr::copy(
-                        guard.s.data.as_ptr().add(guard.idx),
-                        guard.s.data.as_mut_ptr().add(guard.idx - guard.del_bytes),
+                        ptr.add(guard.idx),
+                        ptr.add(guard.idx - guard.del_bytes),
                         ch_len,
                     );
                 }
