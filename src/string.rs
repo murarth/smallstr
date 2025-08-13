@@ -53,6 +53,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     }
 
     /// Construct a `SmallString` by copying data from a `&str`.
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn from_str(s: &str) -> SmallString<A> {
         SmallString {
@@ -596,7 +597,7 @@ impl<A: Array<Item = u8>> From<char> for SmallString<A> {
     }
 }
 
-impl<'a, A: Array<Item = u8>> From<&'a str> for SmallString<A> {
+impl<A: Array<Item = u8>> From<&'_ str> for SmallString<A> {
     #[inline]
     fn from(s: &str) -> SmallString<A> {
         SmallString::from_str(s)
@@ -753,12 +754,7 @@ macro_rules! eq_str {
         impl<'a, A: Array<Item = u8>> PartialEq<$rhs> for SmallString<A> {
             #[inline]
             fn eq(&self, rhs: &$rhs) -> bool {
-                &self[..] == &rhs[..]
-            }
-
-            #[inline]
-            fn ne(&self, rhs: &$rhs) -> bool {
-                &self[..] != &rhs[..]
+                self[..] == rhs[..]
             }
         }
     };
@@ -775,11 +771,6 @@ impl<A: Array<Item = u8>> PartialEq<OsStr> for SmallString<A> {
     fn eq(&self, rhs: &OsStr) -> bool {
         &self[..] == rhs
     }
-
-    #[inline]
-    fn ne(&self, rhs: &OsStr) -> bool {
-        &self[..] != rhs
-    }
 }
 
 #[cfg(feature = "ffi")]
@@ -787,11 +778,6 @@ impl<'a, A: Array<Item = u8>> PartialEq<&'a OsStr> for SmallString<A> {
     #[inline]
     fn eq(&self, rhs: &&OsStr) -> bool {
         &self[..] == *rhs
-    }
-
-    #[inline]
-    fn ne(&self, rhs: &&OsStr) -> bool {
-        &self[..] != *rhs
     }
 }
 
@@ -801,11 +787,6 @@ impl<A: Array<Item = u8>> PartialEq<OsString> for SmallString<A> {
     fn eq(&self, rhs: &OsString) -> bool {
         &self[..] == rhs
     }
-
-    #[inline]
-    fn ne(&self, rhs: &OsString) -> bool {
-        &self[..] != rhs
-    }
 }
 
 #[cfg(feature = "ffi")]
@@ -813,11 +794,6 @@ impl<'a, A: Array<Item = u8>> PartialEq<Cow<'a, OsStr>> for SmallString<A> {
     #[inline]
     fn eq(&self, rhs: &Cow<OsStr>) -> bool {
         self[..] == **rhs
-    }
-
-    #[inline]
-    fn ne(&self, rhs: &Cow<OsStr>) -> bool {
-        self[..] != **rhs
     }
 }
 
@@ -828,12 +804,7 @@ where
 {
     #[inline]
     fn eq(&self, rhs: &SmallString<B>) -> bool {
-        &self[..] == &rhs[..]
-    }
-
-    #[inline]
-    fn ne(&self, rhs: &SmallString<B>) -> bool {
-        &self[..] != &rhs[..]
+        self[..] == rhs[..]
     }
 }
 
@@ -842,7 +813,7 @@ impl<A: Array<Item = u8>> Eq for SmallString<A> {}
 impl<A: Array<Item = u8>> PartialOrd for SmallString<A> {
     #[inline]
     fn partial_cmp(&self, rhs: &SmallString<A>) -> Option<Ordering> {
-        self[..].partial_cmp(&rhs[..])
+        Some(self.cmp(rhs))
     }
 }
 
@@ -916,8 +887,8 @@ impl<A: Array<Item = u8>> Iterator for DrainRange<'_, A> {
         buf[0] = self.drain.next()?;
         let utf8_len = 1.max(buf[0].leading_ones() as usize);
 
-        for i in 1..utf8_len {
-            buf[i] = self.drain.next().unwrap();
+        for b in &mut buf[1..utf8_len] {
+            *b = self.drain.next().unwrap();
         }
 
         unsafe { str::from_utf8_unchecked(&buf[..utf8_len]) }
