@@ -3,7 +3,7 @@ use core::{
     cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
-    iter::FromIterator,
+    iter::{FromIterator, FusedIterator},
     ops, ptr, slice,
     str::{self, Chars, Utf8Error},
 };
@@ -143,6 +143,29 @@ impl<A: Array<Item = u8>> SmallString<A> {
             let s = str::from_utf8_unchecked(slice);
 
             Drain { iter: s.chars() }
+        }
+    }
+
+    /// Empties the sub string and returns an iterator over its former contents.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use smallstr::SmallString;
+    ///
+    /// let mut s: SmallString<[u8; 8]> = SmallString::from("foo bar");
+    /// let sub: String = s.drain_range(1..5).collect();
+    ///
+    /// assert_eq!(sub, "oo b");
+    /// assert_eq!(s, "far");
+    /// ```
+    #[doc(alias = "drain")]
+    pub fn drain_range<R>(&mut self, range: R) -> DrainRange<'_, A>
+    where
+        R: ops::RangeBounds<usize>,
+    {
+        DrainRange {
+            drain: self.data.drain(range),
         }
     }
 
@@ -859,6 +882,65 @@ impl<'a> DoubleEndedIterator for Drain<'a> {
     }
 }
 
+/// A range draining iterator for `SmallString`.
+///
+/// This struct is created by the [`drain_range`] method on [`SmallString`].
+///
+/// [`drain_range`]: struct.SmallString.html#method.drain_range
+/// [`SmallString`]: struct.SmallString.html
+pub struct DrainRange<'a, A: Array<Item = u8>> {
+    drain: smallvec::Drain<'a, A>,
+}
+
+impl<A: Array<Item = u8>> fmt::Debug for DrainRange<'_, A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.drain.fmt(f)
+    }
+}
+
+impl<A: Array<Item = u8>> Iterator for DrainRange<'_, A> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut buf = [0; 4];
+
+        buf[0] = self.drain.next()?;
+        let utf8_len = 1.max(buf[0].leading_ones() as usize);
+
+        for i in 1..utf8_len {
+            buf[i] = self.drain.next().unwrap();
+        }
+
+        unsafe { str::from_utf8_unchecked(&buf[..utf8_len]) }
+            .chars()
+            .next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = self.drain.len();
+        (len.div_ceil(4), Some(len))
+    }
+}
+
+impl<A: Array<Item = u8>> DoubleEndedIterator for DrainRange<'_, A> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let mut buf = [0; 4];
+        let mut i = 3;
+
+        buf[i] = self.drain.next_back()?;
+
+        while buf[i].leading_ones() == 1 {
+            i -= 1;
+            buf[i] = self.drain.next_back().unwrap();
+        }
+
+        unsafe { str::from_utf8_unchecked(&buf[i..]) }
+            .chars()
+            .next()
+    }
+}
+impl<A: Array<Item = u8>> FusedIterator for DrainRange<'_, A> {}
+
 /// A possible error value when creating a `SmallString` from a byte array.
 ///
 /// This type is the error type for the [`from_buf`] method on [`SmallString`].
@@ -926,6 +1008,31 @@ mod test {
     }
 
     #[test]
+    fn test_drain_range() {
+        let mut s: SmallString<[u8; 2]> = SmallString::new();
+
+        s.push('a');
+        assert_eq!(s.drain_range(..).collect::<String>(), "a");
+        assert!(s.is_empty());
+
+        s.push_str("xyz");
+
+        assert_eq!(s.drain_range(1..).collect::<String>(), "yz");
+        assert_eq!(s, "x");
+
+        s.push_str("yz");
+
+        assert_eq!(s.drain_range(..2).collect::<String>(), "xy");
+        assert_eq!(s, "z");
+
+        s.clear();
+        s.push_str("测试文本");
+
+        assert_eq!(s.drain_range(3..9).collect::<String>(), "试文");
+        assert_eq!(s, "测本");
+    }
+
+    #[test]
     fn test_drain_rev() {
         let mut s: SmallString<[u8; 2]> = SmallString::new();
 
@@ -940,6 +1047,37 @@ mod test {
 
         assert_eq!(s.drain().rev().collect::<String>(), "zyx");
         assert!(s.is_empty());
+    }
+
+    #[test]
+    fn test_drain_range_rev() {
+        let mut s: SmallString<[u8; 2]> = SmallString::new();
+
+        s.push('a');
+        assert_eq!(s.drain_range(..).rev().collect::<String>(), "a");
+        assert!(s.is_empty());
+
+        // spilling the vec
+        s.push_str("xyz");
+
+        assert_eq!(s.drain_range(..).rev().collect::<String>(), "zyx");
+        assert!(s.is_empty());
+
+        s.push_str("xyz");
+
+        assert_eq!(s.drain_range(1..).rev().collect::<String>(), "zy");
+        assert_eq!(s, "x");
+
+        s.push_str("yz");
+
+        assert_eq!(s.drain_range(..2).rev().collect::<String>(), "yx");
+        assert_eq!(s, "z");
+
+        s.clear();
+        s.push_str("测试文本");
+
+        assert_eq!(s.drain_range(3..9).rev().collect::<String>(), "文试");
+        assert_eq!(s, "测本");
     }
 
     #[test]
