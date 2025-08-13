@@ -285,11 +285,9 @@ impl<A: Array<Item = u8>> SmallString<A> {
         let len = self.len();
 
         unsafe {
-            ptr::copy(
-                self.as_ptr().add(next),
-                self.as_mut_ptr().add(idx),
-                len - next,
-            );
+            let ptr = self.as_mut_ptr();
+
+            ptr::copy(ptr.add(next), ptr.add(idx), len - next);
             self.data.set_len(len - ch_len);
         }
 
@@ -325,13 +323,11 @@ impl<A: Array<Item = u8>> SmallString<A> {
 
         self.data.reserve(amt);
 
+        let ptr = self.as_mut_ptr();
+
         unsafe {
-            ptr::copy(
-                self.as_ptr().add(idx),
-                self.as_mut_ptr().add(idx + amt),
-                len - idx,
-            );
-            ptr::copy_nonoverlapping(s.as_ptr(), self.as_mut_ptr().add(idx), amt);
+            ptr::copy(ptr.add(idx), ptr.add(idx + amt), len - idx);
+            ptr::copy_nonoverlapping(s.as_ptr(), ptr.add(idx), amt);
             self.data.set_len(len + amt);
         }
     }
@@ -429,10 +425,12 @@ impl<A: Array<Item = u8>> SmallString<A> {
             if !f(ch) {
                 guard.del_bytes += ch_len;
             } else if guard.del_bytes > 0 {
+                let ptr = guard.s.as_mut_ptr();
+
                 unsafe {
                     ptr::copy(
-                        guard.s.data.as_ptr().add(guard.idx),
-                        guard.s.data.as_mut_ptr().add(guard.idx - guard.del_bytes),
+                        ptr.add(guard.idx),
+                        ptr.add(guard.idx - guard.del_bytes),
                         ch_len,
                     );
                 }
@@ -445,8 +443,12 @@ impl<A: Array<Item = u8>> SmallString<A> {
         drop(guard);
     }
 
+    fn as_ptr(&mut self) -> *const u8 {
+        self.data.as_ptr()
+    }
+
     fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.as_ptr() as *mut u8
+        self.data.as_mut_ptr()
     }
 }
 
