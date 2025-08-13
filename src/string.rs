@@ -132,7 +132,7 @@ impl<A: Array<Item = u8>> SmallString<A> {
     }
 
     /// Empties the string and returns an iterator over its former contents.
-    pub fn drain(&mut self) -> Drain {
+    pub fn drain(&mut self) -> Drain<'_> {
         unsafe {
             let len = self.len();
 
