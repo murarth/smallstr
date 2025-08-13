@@ -1,6 +1,7 @@
 use core::{
     borrow::{Borrow, BorrowMut},
     cmp::Ordering,
+    convert::Infallible,
     fmt,
     hash::{Hash, Hasher},
     iter::{FromIterator, FusedIterator},
@@ -8,7 +9,7 @@ use core::{
     str::{self, Chars, Utf8Error},
 };
 
-use alloc::{borrow::Cow, boxed::Box, string::String};
+use alloc::{borrow::Cow, boxed::Box, str::FromStr, string::String};
 
 #[cfg(feature = "ffi")]
 use std::ffi::{OsStr, OsString};
@@ -542,6 +543,14 @@ impl<A: Array<Item = u8>> fmt::Write for SmallString<A> {
     }
 }
 
+impl<A: Array<Item = u8>> FromStr for SmallString<A> {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(SmallString::from(s))
+    }
+}
+
 #[cfg(feature = "serde")]
 impl<A: Array<Item = u8>> Serialize for SmallString<A> {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -985,6 +994,7 @@ impl<A: Array<Item = u8>> fmt::Display for FromUtf8Error<A> {
 mod test {
     use alloc::{
         borrow::{Cow, ToOwned},
+        str::FromStr,
         string::{String, ToString},
     };
 
@@ -1242,6 +1252,13 @@ mod test {
         write!(s, "bar").unwrap();
 
         assert_eq!(s, "foobar");
+    }
+
+    #[test]
+    fn test_from_str() {
+        let s: SmallString<[u8; 8]> = FromStr::from_str("foo").unwrap();
+
+        assert_eq!(s, "foo");
     }
 
     #[cfg(feature = "serde")]
